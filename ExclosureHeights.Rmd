@@ -1,0 +1,264 @@
+---
+title: "ExclosureHeights"
+author: "Amelia Renner"
+date: "9/9/2022"
+output: 
+  html_document:
+    toc: true
+    theme: journal
+    toc_float: true
+    df_print: paged
+    code_download: true
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r Libraries}
+library(dplyr)
+library(lme4)
+library(nlme)
+library(rstatix)
+library(tidyr)
+library(lubridate)
+library(MuMIn)
+library(ggplot2)
+library(tidyverse)
+library(readr)
+library(broom)
+library(ggpubr)
+library(RColorBrewer)
+library(ggsci)
+library(paletteer)
+library(stringr)
+library(patchwork)
+library(paletteer)
+library(ggstatsplot)
+library(writexl)
+```
+
+```{r Loading Data}
+ht19 <- read.csv("Exclosure2019Heights.csv")
+ht20 <- read.csv("Exclosure2020Heights.csv")
+ht21 <- read.csv("Exclosure2021Heights.csv")
+ht22 <- read.csv("Exclosure2022Heights.csv")
+```
+
+```{r}
+# Fixing variable names to match and adding year to each df 
+ht19 <- ht19 %>% 
+  dplyr::rename("Plot" = "PLOT") %>%
+  mutate(Year = "2019")
+ht20 <- ht20 %>% 
+  mutate(Year = "2020")
+ht21 <- ht21 %>% 
+  mutate(Year = "2021")
+ht22 <- ht22 %>% 
+  dplyr::rename("Plot" = "PLOT") %>% # case must be identical for binding rows
+  mutate(Year = "2022") 
+```
+
+
+```{r}
+# creating one df and removing two completely empty rows 
+combo <- ht19 %>%
+  bind_rows(ht20, ht21, ht22) 
+combo <- combo[-c(21:22), ]
+
+# open or exclosed var 
+combo <- combo %>%
+  mutate(Pair = str_sub(Plot, start = 6, end = 7))
+```
+
+```{r}
+# Importing a new version 
+cleanht <- read.csv("CleanHeights.csv")
+```
+
+```{r}
+cleanht <- cleanht %>%
+  mutate(Pair = str_sub(Plot, start = 6, end = 7))
+
+cleanht %>% group_by(Species) %>% dplyr::summarize(count = n())
+
+```
+
+```{r}
+cleanht %>%
+  ggplot() + 
+  geom_point(aes(x = Year, y = Height)) + 
+  facet_wrap(vars(Pair))
+```
+
+```{r}
+# ANOVA 
+# Plant height by year and plot 
+
+# Remove NAs for Tukey 
+cleanht <- cleanht %>% 
+  na.omit(cleanht) %>%
+  mutate(Year = as.numeric(Year))
+aov1 <- aov(Height ~ Pair * Year, cleanht)
+summary(aov1)
+
+# No post hoc b/c only two levels - the difference is somewhere in there ? 
+# Tukey returns an error 
+```
+
+```{r}
+cleanht %>%
+  ggplot() + 
+  geom_boxplot(aes(x = Year, y = Height, color = Pair))  
+```
+
+
+
+```{r}
+# Needs work 
+cleanht %>%
+  ggplot() + 
+  geom_density(aes(x = Height, color = Year)) + 
+  facet_wrap(vars(Pair))
+```
+
+
+# Cross Tables 
+
+```{r}
+cleanht %>% group_by(Plot) %>% dplyr::summarise(count = n())
+
+cleanht <- cleanht %>%
+  mutate(GM = str_sub(Plot, end = 1)) %>%
+  mutate(GM = ifelse(GM == "L", "Low", "High"), 
+         ExGM = str_c(GM, Pair, sep = "_"), 
+         YrEx = str_c(Year, Pair, sep = "_")) 
+
+
+
+# EXCLOSED / OPEN 
+#CrossTable(cleanht$Species, cleanht$Pair, digits=1, chisq = TRUE, expected = TRUE, sresid = TRUE, format="SPSS")
+
+# HIGH / LOW 
+#CrossTable(cleanht$Species, cleanht$GM, digits=1, chisq = TRUE, expected = TRUE, sresid = TRUE, format="SPSS")
+
+# HIGH / LOW and EX / OPEN 
+#CrossTable(cleanht$Species, cleanht$ExGM, digits=1, chisq = TRUE, expected = TRUE, sresid = TRUE, format="SPSS")
+
+# Year and EX / OPEN 
+#CrossTable(cleanht$Species, cleanht$YrEx, digits=1, chisq = TRUE, expected = TRUE, sresid = TRUE, format="SPSS")
+
+lowOnlyHt <- cleanht %>%
+  filter(GM == "Low")
+highOnlyHt <- cleanht %>%
+  filter(GM == "High")
+
+# LOW ONLY - YEAR and EX/OP
+#CrossTable(lowOnlyHt$Species, lowOnlyHt$YrEx, digits=1, chisq = TRUE, expected = TRUE, sresid = TRUE, format="SPSS")
+
+# HIGH ONLY - YEAR and EX/OP
+#CrossTable(highOnlyHt$Species, highOnlyHt$YrEx, digits=1, chisq = TRUE, expected = TRUE, sresid = TRUE, format="SPSS")
+
+ExOnlyHt <- cleanht %>%
+  filter(Pair == "Ex")
+OpOnlyHt <- cleanht %>%
+  filter(Pair == "OP")
+
+
+# EXCLOSED ONLY - YEAR and H/L
+#CrossTable(ExOnlyHt$Species, ExOnlyHt$YrEx, digits=1, chisq = TRUE, expected = TRUE, sresid = TRUE, format="SPSS")
+
+# OPEN ONLY - YEAR and H/L
+#CrossTable(OpOnlyHt$Species, OpOnlyHt$YrEx, digits=1, chisq = TRUE, expected = TRUE, sresid = TRUE, format="SPSS")
+```
+
+
+```{r}
+#combo <- na.omit(combo)
+
+clean2 <- cleanht %>%
+  dplyr::select(Year, Pair, GM, Species)
+
+low19 <- clean2 %>%
+  filter(Year == '2019', 
+        GM == 'Low') %>%
+  dplyr::select(Pair, Species)
+
+high19 <- clean2 %>%
+  filter(Year == '2019', 
+         GM == 'High') %>%
+  dplyr::select(Pair, Species) 
+
+low20 <- clean2 %>%
+  filter(Year == '2020', 
+         GM == 'Low') %>%
+  dplyr::select(Pair, Species) 
+
+high20 <- clean2 %>%
+  filter(Year == '2020', 
+         GM == 'High')%>%
+  dplyr::select(Pair, Species) 
+
+low21 <- clean2 %>%
+  filter(Year == '2021', 
+         GM == 'Low') %>%
+  dplyr::select(Pair, Species) 
+
+high21 <- clean2 %>%
+  filter(Year == '2021', 
+         GM == 'High') %>%
+  dplyr::select(Pair, Species)
+
+low22 <- clean2 %>%
+  filter(Year == '2022', 
+         GM == 'Low') %>%
+  dplyr::select(Pair, Species) 
+high22 <- clean2 %>%
+  filter(Year == '2022', 
+         GM == 'High') %>%
+  dplyr::select(Pair, Species) 
+
+low19_fish <- fisher.test(table(low19$Species, low19$Pair))
+low20_fish <- fisher.test(table(low20$Species, low20$Pair))
+low21_fish <- fisher.test(table(low21$Species, low21$Pair))
+low22_fish <- fisher.test(table(low22$Species, low22$Pair))
+
+high19_fish <- fisher.test(table(high19$Species, high19$Pair))
+high20_fish <- fisher.test(table(high20$Species, high20$Pair))
+high21_fish <- fisher.test(table(high21$Species, high21$Pair))
+high22_fish <- fisher.test(table(high22$Species, high22$Pair))
+
+#pairwise_fisher_test(as.matrix(high22), p.adjust.method = "fdr")
+
+low19matrix <- table(low19)
+low20matrix <- table(low20)
+low21matrix <- table(low21)
+low22matrix <- table(low22)
+
+high19matrix <- table(high19)
+
+pairwise_fisher_test(as.matrix(low19matrix), p.adjust.method = "fdr")
+#row_wise_fisher_test(as.matrix(low19matrix), p.adjust.method = "fdr")
+```
+
+
+
+## Mixed Model for Heights 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
